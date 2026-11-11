@@ -209,6 +209,14 @@ std::vector<std::string> WfsFileSystem::SplitPath(const std::string& path) {
 }
 
 bool WfsFileSystem::ReadInode(uint32_t clusterIndex, WfsInodeDisk& outInode) {
+    if (transaction_ && transaction_->IsActive()) {
+        std::vector<uint8_t> stagedBuf;
+        if (transaction_->GetStagedCluster(clusterIndex, stagedBuf)) {
+            std::memcpy(&outInode, stagedBuf.data(), sizeof(WfsInodeDisk));
+            return true;
+        }
+    }
+
     if (!device_ || !device_->IsOpen()) return false;
     std::vector<uint8_t> buf(clusterSize_, 0);
     uint64_t sector = static_cast<uint64_t>(clusterIndex) * sectorsPerCluster_;
@@ -236,10 +244,17 @@ bool WfsFileSystem::ReadDirectoryEntries(const WfsInodeDisk& dirInode, std::vect
         for (uint32_t c = 0; c < count; ++c) {
             uint32_t cluster = startCluster + c;
             std::vector<uint8_t> buf(clusterSize_, 0);
-            uint64_t sector = static_cast<uint64_t>(cluster) * sectorsPerCluster_;
 
-            if (!device_->ReadSectors(sector, sectorsPerCluster_, buf.data())) return false;
-            WfsCrypto::CryptCluster(usbKey_, cluster * sectorsPerCluster_, buf.data(), clusterSize_, false);
+            bool fromStaged = false;
+            if (transaction_ && transaction_->IsActive()) {
+                fromStaged = transaction_->GetStagedCluster(cluster, buf);
+            }
+
+            if (!fromStaged) {
+                uint64_t sector = static_cast<uint64_t>(cluster) * sectorsPerCluster_;
+                if (!device_->ReadSectors(sector, sectorsPerCluster_, buf.data())) return false;
+                WfsCrypto::CryptCluster(usbKey_, cluster * sectorsPerCluster_, buf.data(), clusterSize_, false);
+            }
 
             size_t entryCount = clusterSize_ / sizeof(WfsDirEntryDisk);
             const WfsDirEntryDisk* diskEntries = reinterpret_cast<const WfsDirEntryDisk*>(buf.data());
@@ -508,10 +523,16 @@ bool WfsFileSystem::ReadFile(const std::string& fullPath, std::vector<uint8_t>& 
             uint32_t cluster = startCluster + c;
 
             std::vector<uint8_t> buf(clusterSize_, 0);
-            uint64_t sector = static_cast<uint64_t>(cluster) * sectorsPerCluster_;
-            if (!device_->ReadSectors(sector, sectorsPerCluster_, buf.data())) return false;
+            bool fromStaged = false;
+            if (transaction_ && transaction_->IsActive()) {
+                fromStaged = transaction_->GetStagedCluster(cluster, buf);
+            }
 
-            WfsCrypto::CryptCluster(usbKey_, cluster * sectorsPerCluster_, buf.data(), clusterSize_, false);
+            if (!fromStaged) {
+                uint64_t sector = static_cast<uint64_t>(cluster) * sectorsPerCluster_;
+                if (!device_->ReadSectors(sector, sectorsPerCluster_, buf.data())) return false;
+                WfsCrypto::CryptCluster(usbKey_, cluster * sectorsPerCluster_, buf.data(), clusterSize_, false);
+            }
 
             size_t bytesFromThisCluster = std::min(static_cast<size_t>(fileInode.file_size - bytesRead), static_cast<size_t>(clusterSize_));
             std::memcpy(outData.data() + bytesRead, buf.data(), bytesFromThisCluster);

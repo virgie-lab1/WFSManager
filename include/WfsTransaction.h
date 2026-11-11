@@ -59,6 +59,17 @@ public:
     size_t GetStagedCount() const { return stagedWrites_.size(); }
     const std::string& GetLastBackupPath() const { return lastBackupPath_; }
 
+    // Read uncommitted cluster data from staged write cache
+    bool GetStagedCluster(uint32_t clusterIndex, std::vector<uint8_t>& outPlaintext) const {
+        if (!inTransaction_) return false;
+        auto it = stagedWrites_.find(clusterIndex);
+        if (it != stagedWrites_.end()) {
+            outPlaintext = it->second.plaintextData;
+            return true;
+        }
+        return false;
+    }
+
 private:
     IWfsDevice* device_;
     WfsBlockAllocator* allocator_;
