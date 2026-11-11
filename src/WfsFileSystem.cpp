@@ -162,7 +162,10 @@ bool WfsFileSystem::Format(
 
     // Allocate 1 cluster for root directory entries
     std::vector<WfsExtent> rootExtents;
-    allocator_->AllocateClusters(1, rootExtents);
+    if (!allocator_->AllocateClusters(1, rootExtents) || rootExtents.empty()) {
+        std::cerr << "[WfsFileSystem] Failed to allocate cluster for root directory" << std::endl;
+        return false;
+    }
     rootInode.direct_extent_count = 1;
     rootInode.direct_extents[0].start_cluster = rootExtents[0].startCluster;
     rootInode.direct_extents[0].count = 1;

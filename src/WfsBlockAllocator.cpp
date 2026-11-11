@@ -24,6 +24,7 @@ WfsBlockAllocator::WfsBlockAllocator(IWfsDevice* device, uint32_t clusterSize, u
     activeBitmap_.resize(bitmapBytes, 0);
     committedBitmap_.resize(bitmapBytes, 0);
     snapshotBitmap_.resize(bitmapBytes, 0);
+    freeClusterCount_ = totalClusters_;
 }
 
 bool WfsBlockAllocator::Load() {
