@@ -3,6 +3,7 @@
 #include "WfsCommon.h"
 #include "WfsDiskDevice.h"
 #include "WfsFileSystem.h"
+#include "WfsDriveHealth.h"
 #include <string>
 #include <vector>
 
@@ -13,13 +14,15 @@ struct SafetyAuditReport {
     bool superblockValid;
     bool backupSuperblockValid;
     bool allocationTableValid;
+    bool driveHealthSafe;
+    DriveHealthStatus driveHealthStatus;
     uint32_t orphanClusterCount;
     uint32_t unallocatedReferenceCount;
     std::vector<std::string> warnings;
     std::vector<std::string> criticalErrors;
 
     bool CanProceedWithWrite() const {
-        return diskLockVerified && superblockValid && allocationTableValid && criticalErrors.empty();
+        return diskLockVerified && superblockValid && allocationTableValid && driveHealthSafe && criticalErrors.empty();
     }
 };
 

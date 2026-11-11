@@ -16,6 +16,7 @@ set(COMMON_SOURCES
     src/WfsFileSystem.cpp
     src/WfsTitleManager.cpp
     src/WfsSafetyGuard.cpp
+    src/WfsDriveHealth.cpp
 )
 
 # CLI Management Executable

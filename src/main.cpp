@@ -4,6 +4,7 @@
 #include "WfsFileSystem.h"
 #include "WfsTitleManager.h"
 #include "WfsSafetyGuard.h"
+#include "WfsDriveHealth.h"
 
 #include <iostream>
 #include <fstream>
@@ -25,6 +26,8 @@ static void PrintUsage(const char* exeName) {
               << "  --dry-run                Simulate writes in-memory without touching physical disk\n"
               << "  --backup-dir <path>      Directory to store automatic pre-transaction metadata backups\n\n"
               << "Commands:\n"
+              << "  health                   Check drive S.M.A.R.T. health, temperature, and bad sectors\n"
+              << "                           [--surface-scan] Perform deep sector read latency & bad block scan\n"
               << "  list                     List all installed applications, updates, and DLCs\n"
               << "  info <title_id>          Display detailed metadata and cluster layout of a title\n"
               << "  uninstall <title_id>     Safely uninstall title, free blocks, and clean tickets\n"
@@ -59,6 +62,7 @@ int main(int argc, char* argv[]) {
     bool dryRun = false;
     bool keepTicket = false;
     bool forceSystem = false;
+    bool surfaceScan = false;
     std::string explicitTitleId;
 
     std::string command;
@@ -82,6 +86,8 @@ int main(int argc, char* argv[]) {
             keepTicket = true;
         } else if (arg == "--force") {
             forceSystem = true;
+        } else if (arg == "--surface-scan") {
+            surfaceScan = true;
         } else if (arg == "--title-id" && i + 1 < argc) {
             explicitTitleId = argv[++i];
         } else if (command.empty() && arg[0] != '-') {
@@ -94,6 +100,28 @@ int main(int argc, char* argv[]) {
     if (command.empty()) {
         PrintUsage(argv[0]);
         return 1;
+    }
+
+    if (command == "health") {
+        if (driveIndex < 0 && imagePath.empty()) {
+            std::cerr << "Error: health command requires either --drive <index> or --image <path>" << std::endl;
+            return 1;
+        }
+
+        DriveHealthReport report;
+        if (driveIndex >= 0) {
+            std::cout << "Inspecting S.M.A.R.T. hardware health for \\\\.\\PhysicalDrive" << driveIndex 
+                      << (surfaceScan ? " [DEEP SURFACE SCAN]" : "") << "..." << std::endl;
+            report = WfsDriveHealth::CheckDrive(driveIndex, surfaceScan);
+        } else {
+            std::cout << "Checking health and surface integrity for image " << imagePath << "..." << std::endl;
+            WfsFileImageDevice imgDev(imagePath, true);
+            imgDev.Open();
+            report = WfsDriveHealth::CheckDevice(&imgDev, surfaceScan);
+        }
+
+        WfsDriveHealth::PrintReport(report);
+        return (report.overallHealth == DriveHealthStatus::Bad) ? 2 : 0;
     }
 
     // Load Cryptographic Keys

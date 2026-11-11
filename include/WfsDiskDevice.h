@@ -51,6 +51,7 @@ public:
 
     bool Flush() override;
     bool IsDryRun() const override { return dryRun_; }
+    int GetDriveIndex() const { return driveIndex_; }
 
     // Lock and dismount all Windows logical volumes mapped to this physical drive
     bool LockAndDismountVolumes();

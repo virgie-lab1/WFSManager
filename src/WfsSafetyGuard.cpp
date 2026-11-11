@@ -38,8 +38,36 @@ SafetyAuditReport WfsSafetyGuard::RunPreflightAudit(WfsFileSystem *fs,
   report.superblockValid = false;
   report.backupSuperblockValid = false;
   report.allocationTableValid = false;
+  report.driveHealthSafe = true;
+  report.driveHealthStatus = DriveHealthStatus::Unknown;
   report.orphanClusterCount = 0;
   report.unallocatedReferenceCount = 0;
+
+  // Step 1: Physical Drive Health / S.M.A.R.T. Inspection
+  if (device) {
+    DriveHealthReport health = WfsDriveHealth::CheckDevice(device, false);
+    report.driveHealthStatus = health.overallHealth;
+
+    if (health.overallHealth == DriveHealthStatus::Bad) {
+      report.driveHealthSafe = false;
+      std::string issues;
+      for (const auto& w : health.criticalWarnings) {
+        if (!issues.empty()) issues += "; ";
+        issues += w;
+      }
+      report.criticalErrors.push_back(
+          "CRITICAL HARDWARE FAILURE: Physical drive S.M.A.R.T. health is BAD (" + 
+          issues + "). Modifying WFS filesystem will cause unrecoverable corruption!"
+      );
+    } else if (health.overallHealth == DriveHealthStatus::Caution) {
+      std::string issues;
+      for (const auto& w : health.cautionWarnings) {
+        if (!issues.empty()) issues += "; ";
+        issues += w;
+      }
+      report.warnings.push_back("Physical drive health is in CAUTION state: " + issues);
+    }
+  }
 
   std::vector<std::string> lockIssues;
   report.diskLockVerified = VerifyExclusiveDiskLock(device, lockIssues);
@@ -156,6 +184,10 @@ void WfsSafetyGuard::PrintAuditReport(const SafetyAuditReport &report) {
       << std::endl;
   std::cout << " Exclusive Disk Lock:       "
             << (report.diskLockVerified ? "[PASSED]" : "[FAILED/WARNING]")
+            << std::endl;
+  std::cout << " Drive Hardware Health:     [" 
+            << WfsDriveHealth::HealthStatusToString(report.driveHealthStatus) << "]" 
+            << (report.driveHealthSafe ? " [SAFE]" : " [UNSAFE/CRITICAL]")
             << std::endl;
   std::cout << " Primary Superblock:        "
             << (report.superblockValid ? "[VALID]" : "[CORRUPT]") << std::endl;

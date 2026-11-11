@@ -55,7 +55,8 @@ c:\Users\Virg\WFSManager\
 │   ├── WfsTransaction.h      // Atomic commit engine, WAL/journaling, pre-write snapshot & rollback
 │   ├── WfsFileSystem.h       // Main WFS driver: mount, read, write, traverse, delete, insert
 │   ├── WfsTitleManager.h     // Title uninstallation, recursive block freeing, NUS/unpacked installer
-│   └── WfsSafetyGuard.h      // Windows disk lock verification, dry-run simulator, integrity verification
+│   ├── WfsDriveHealth.h      // CrystalDiskInfo-grade S.M.A.R.T. monitor, SAT/NVMe pass-through & surface scan
+│   └── WfsSafetyGuard.h      // Windows disk lock verification, hardware health check, integrity audit
 ├── src\
 │   ├── WfsCrypto.cpp
 │   ├── WfsDiskDevice.cpp
@@ -64,10 +65,12 @@ c:\Users\Virg\WFSManager\
 │   ├── WfsFileSystem.cpp
 │   ├── WfsTitleManager.cpp
 │   ├── WfsSafetyGuard.cpp
+│   ├── WfsDriveHealth.cpp
 │   └── main.cpp              // Production CLI / management engine
 ├── tests\
 │   ├── test_wfs.cpp          // C++ automated unit & integrity test suite
-│   └── verify_wfs_suite.py   // Python verification test harness
+│   ├── verify_wfs_suite.py   // Python verification test harness
+│   └── sim_wfs_engine.py     // Python end-to-end WFS pipeline simulator
 └── CMakeLists.txt            // CMake build configuration
 ```
 
@@ -80,6 +83,15 @@ c:\Users\Virg\WFSManager\
 mkdir build && cd build
 cmake ..
 cmake --build . --config Release
+```
+
+### Drive Health & S.M.A.R.T. Inspection (CrystalDiskInfo-Style)
+```bash
+# Fast S.M.A.R.T. health check, temperature, and wear status (no keys required)
+wfsmanager --drive 1 health
+
+# Deep surface sector scan with high-resolution read latency & bad block detection
+wfsmanager --drive 1 health --surface-scan
 ```
 
 ### List Installed Titles

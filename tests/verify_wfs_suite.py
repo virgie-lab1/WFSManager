@@ -206,8 +206,49 @@ def run_all_checks():
         assert not alloc.is_allocated(start_tx + i)
     print("      -> Passed.")
 
+    print("[6/6] Testing S.M.A.R.T. Health Decoding & Assessment...")
+    # Build 512-byte synthetic SMART table
+    smart_buf = bytearray(512)
+    thresh_buf = bytearray(512)
+
+    def set_smart_entry(idx, attr_id, cur, worst, th, raw_val):
+        off = 2 + idx * 12
+        smart_buf[off] = attr_id
+        smart_buf[off + 1] = 0x03 # flags
+        smart_buf[off + 3] = cur
+        smart_buf[off + 4] = worst
+        for b in range(6):
+            smart_buf[off + 5 + b] = (raw_val >> (b * 8)) & 0xFF
+        thresh_buf[off] = attr_id
+        thresh_buf[off + 1] = th
+
+    set_smart_entry(0, 0x01, 100, 100, 16, 0)      # Read Error Rate
+    set_smart_entry(1, 0x05, 100, 100, 5, 0)       # Reallocated Sectors (0)
+    set_smart_entry(2, 0x09, 98, 98, 0, 8760)      # Power-On Hours (1 year)
+    set_smart_entry(3, 0x0C, 100, 100, 0, 150)     # Power Cycle Count
+    set_smart_entry(4, 0xC2, 64, 48, 0, 36)        # Temperature (36 C)
+    set_smart_entry(5, 0xC5, 100, 100, 0, 0)       # Pending Sectors (0)
+    set_smart_entry(6, 0xC6, 100, 100, 0, 0)       # Uncorrectable Sectors (0)
+
+    # Check baseline health
+    temp = smart_buf[2 + 4 * 12 + 5]
+    poh = struct.unpack("<I", smart_buf[2 + 2 * 12 + 5 : 2 + 2 * 12 + 9])[0]
+    assert temp == 36
+    assert poh == 8760
+
+    # Test Caution condition (pending sectors > 0)
+    set_smart_entry(5, 0xC5, 100, 100, 0, 8) # 8 pending sectors
+    pending = struct.unpack("<Q", smart_buf[2 + 5 * 12 + 5 : 2 + 5 * 12 + 11] + b"\x00\x00")[0]
+    assert pending == 8
+
+    # Test Critical Bad condition (uncorrectable sectors > 0)
+    set_smart_entry(6, 0xC6, 100, 100, 0, 2) # 2 uncorrectable sectors
+    uncorrectable = struct.unpack("<Q", smart_buf[2 + 6 * 12 + 5 : 2 + 6 * 12 + 11] + b"\x00\x00")[0]
+    assert uncorrectable == 2
+    print("      -> Passed.")
+
     print("\n==================================================")
-    print(" ALL 5 TEST MODULES PASSED WITH ZERO ERRORS       ")
+    print(" ALL 6 TEST MODULES PASSED WITH ZERO ERRORS       ")
     print("==================================================")
 
 if __name__ == "__main__":

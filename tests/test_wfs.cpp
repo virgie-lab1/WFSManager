@@ -6,6 +6,7 @@
 #include "WfsSafetyGuard.h"
 #include "WfsTitleManager.h"
 #include "WfsTransaction.h"
+#include "WfsDriveHealth.h"
 
 #include <cstdlib>
 #include <cstring>
@@ -288,6 +289,80 @@ static void TestAtomicRollbackOnFailure() {
             << std::endl;
 }
 
+static void TestDriveHealthAndSmartDiagnostics() {
+  std::cout << "[TEST] Running S.M.A.R.T. Health Diagnostics & Surface Scanner..."
+            << std::endl;
+
+  // 1. Synthetic 512-byte ATA S.M.A.R.T. Table
+  std::vector<uint8_t> smartData(512, 0);
+  std::vector<uint8_t> thresholds(512, 0);
+
+  // Helper lambda to insert attribute into table
+  auto insertAttr = [&](size_t idx, uint8_t id, uint8_t cur, uint8_t wst, uint8_t th, uint64_t raw) {
+    size_t offset = 2 + idx * 12;
+    smartData[offset] = id;
+    smartData[offset + 1] = 0x03; // flags: pre-failure, advisory
+    smartData[offset + 3] = cur;
+    smartData[offset + 4] = wst;
+    for (int b = 0; b < 6; ++b) {
+      smartData[offset + 5 + b] = static_cast<uint8_t>((raw >> (b * 8)) & 0xFF);
+    }
+    thresholds[offset] = id;
+    thresholds[offset + 1] = th;
+  };
+
+  // Build clean healthy baseline
+  insertAttr(0, 0x01, 100, 100, 16, 0);     // Read Error Rate
+  insertAttr(1, 0x05, 100, 100, 5, 0);      // Reallocated Sectors (0)
+  insertAttr(2, 0x09, 98, 98, 0, 1250);     // Power-On Hours (1250)
+  insertAttr(3, 0x0C, 100, 100, 0, 45);     // Power Cycle Count (45)
+  insertAttr(4, 0xC2, 68, 52, 0, 32);       // Temperature (32 deg C)
+  insertAttr(5, 0xC5, 100, 100, 0, 0);      // Current Pending Sectors (0)
+  insertAttr(6, 0xC6, 100, 100, 0, 0);      // Offline Uncorrectable (0)
+  insertAttr(7, 0xC7, 200, 200, 0, 0);      // UltraDMA CRC Errors (0)
+
+  DriveHealthReport report;
+  report.mediaType = DriveMediaType::HDD;
+  bool parsed = WfsDriveHealth::ParseAtaSmartData(smartData.data(), thresholds.data(), report);
+  WFS_ASSERT(parsed && "ParseAtaSmartData failed on valid 512-byte payload");
+
+  WfsDriveHealth::EvaluateHealth(report);
+  WFS_ASSERT(report.overallHealth == DriveHealthStatus::Good && "Healthy baseline must be Good");
+  WFS_ASSERT(report.temperatureC == 32 && "Temperature extraction mismatch");
+  WFS_ASSERT(report.powerOnHours == 1250 && "Power-on hours mismatch");
+  WFS_ASSERT(report.powerCycleCount == 45 && "Power cycle count mismatch");
+  WFS_ASSERT(report.healthScore == 100 && "Clean drive should have 100% health score");
+
+  // 2. Test Caution Trigger (Current Pending Sectors > 0)
+  insertAttr(5, 0xC5, 100, 100, 0, 4); // 4 pending sectors
+  WfsDriveHealth::ParseAtaSmartData(smartData.data(), thresholds.data(), report);
+  WfsDriveHealth::EvaluateHealth(report);
+  WFS_ASSERT(report.overallHealth == DriveHealthStatus::Caution && "Pending sectors must trigger Caution");
+  WFS_ASSERT(report.pendingSectors == 4 && "Pending sector count mismatch");
+  WFS_ASSERT(!report.cautionWarnings.empty() && "Caution advisories must be populated");
+  WFS_ASSERT(report.healthScore < 100 && "Health score must decrease on pending sectors");
+
+  // 3. Test Critical Bad Trigger (Offline Uncorrectable Sectors > 0)
+  insertAttr(6, 0xC6, 100, 100, 0, 2); // 2 uncorrectable sectors
+  WfsDriveHealth::ParseAtaSmartData(smartData.data(), thresholds.data(), report);
+  WfsDriveHealth::EvaluateHealth(report);
+  WFS_ASSERT(report.overallHealth == DriveHealthStatus::Bad && "Uncorrectable sectors must trigger Bad");
+  WFS_ASSERT(report.uncorrectableSectors == 2 && "Uncorrectable count mismatch");
+  WFS_ASSERT(!report.criticalWarnings.empty() && "Critical warnings must be populated");
+
+  // 4. Test In-Memory Device Surface Scan
+  WfsMemoryDevice memDev(131072, 512);
+  memDev.Open();
+  DriveHealthReport devReport = WfsDriveHealth::CheckDevice(&memDev, true, 2048);
+  WFS_ASSERT(devReport.surfaceScanCompleted && "Surface scan should complete");
+  WFS_ASSERT(devReport.surfaceSectorsScanned > 0 && "Sectors must be scanned");
+  WFS_ASSERT(devReport.surfaceBadSectors == 0 && "Virtual memory device has zero bad sectors");
+  WFS_ASSERT(devReport.overallHealth == DriveHealthStatus::Good && "Virtual device should evaluate as Good");
+
+  std::cout << "  -> S.M.A.R.T. health checks, parsing, caution/bad alerts, and surface scan passed!"
+            << std::endl;
+}
+
 int main() {
   std::cout << "========================================================\n"
             << "       WFS MANAGER - AUTOMATED TEST SUITE               \n"
@@ -298,6 +373,7 @@ int main() {
   TestFormatAndMount();
   TestTitleInstallationAndUninstallation();
   TestAtomicRollbackOnFailure();
+  TestDriveHealthAndSmartDiagnostics();
 
   std::cout << "\n>>> ALL UNIT & INTEGRITY TESTS PASSED SUCCESSFULLY! <<<\n"
             << std::endl;
