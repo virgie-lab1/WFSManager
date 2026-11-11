@@ -124,6 +124,7 @@ bool WfsSafetyGuard::ValidateUninstallSafety(
 bool WfsSafetyGuard::ValidateInstallSafety(
     WfsFileSystem *fs, uint64_t requiredBytes, TitleId targetTitleId,
     std::vector<std::string> &outErrors) {
+  (void)targetTitleId;
   outErrors.clear();
   if (!fs || !fs->IsMounted()) {
     outErrors.push_back("Filesystem not mounted");

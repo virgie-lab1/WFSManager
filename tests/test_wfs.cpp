@@ -7,10 +7,19 @@
 #include "WfsTitleManager.h"
 #include "WfsTransaction.h"
 
-#include <cassert>
+#include <cstdlib>
 #include <cstring>
 #include <iostream>
 #include <vector>
+
+#define WFS_ASSERT(cond)                                                                \
+  do {                                                                                  \
+    if (!(cond)) {                                                                      \
+      std::cerr << "[TEST FAILURE] Assertion failed: " #cond " in " << __FUNCTION__     \
+                << " (" << __FILE__ << ":" << __LINE__ << ")" << std::endl;            \
+      std::exit(1);                                                                     \
+    }                                                                                   \
+  } while (0)
 
 using namespace WfsManager;
 
@@ -31,13 +40,13 @@ static void TestCrypto() {
 
   uint8_t cipher[16];
   WfsCrypto::Aes128EcbEncrypt(key, plain, cipher);
-  assert(std::memcmp(cipher, expectedCipher, 16) == 0 &&
-         "AES-128-ECB Encrypt failed NIST test vector");
+  WFS_ASSERT(std::memcmp(cipher, expectedCipher, 16) == 0 &&
+             "AES-128-ECB Encrypt failed NIST test vector");
 
   uint8_t decrypted[16];
   WfsCrypto::Aes128EcbDecrypt(key, cipher, decrypted);
-  assert(std::memcmp(decrypted, plain, 16) == 0 &&
-         "AES-128-ECB Decrypt failed NIST test vector");
+  WFS_ASSERT(std::memcmp(decrypted, plain, 16) == 0 &&
+             "AES-128-ECB Decrypt failed NIST test vector");
 
   // Test 2: SHA-1
   std::string testMsg = "hello";
@@ -47,13 +56,13 @@ static void TestCrypto() {
   const uint8_t expectedSha[20] = {0xaa, 0xf4, 0xc6, 0x1d, 0xdc, 0xc5, 0xe8,
                                    0xa2, 0xda, 0xbe, 0xde, 0x0f, 0x3b, 0x48,
                                    0x2c, 0xd9, 0xae, 0xa9, 0x43, 0x4d};
-  assert(std::memcmp(sha.data(), expectedSha, 20) == 0 &&
-         "SHA-1 failed known test vector");
+  WFS_ASSERT(std::memcmp(sha.data(), expectedSha, 20) == 0 &&
+             "SHA-1 failed known test vector");
 
   // Test 3: CRC32
   uint32_t crc =
       WfsCrypto::Crc32(reinterpret_cast<const uint8_t *>("123456789"), 9);
-  assert(crc == 0xCBF43926 && "CRC32 failed standard test vector");
+  WFS_ASSERT(crc == 0xCBF43926 && "CRC32 failed standard test vector");
 
   // Test 4: USB Key Derivation
   std::vector<uint8_t> otp(1024, 0xAA);
@@ -66,9 +75,9 @@ static void TestCrypto() {
   uint8_t derivedUsbKey[16];
   bool ok = WfsCrypto::DeriveUsbStorageKey(
       otp.data(), otp.size(), seeprom.data(), seeprom.size(), derivedUsbKey);
-  assert(ok && "DeriveUsbStorageKey failed");
-  assert(std::memcmp(derivedUsbKey, expectedCipher, 16) == 0 &&
-         "DeriveUsbStorageKey result mismatch");
+  WFS_ASSERT(ok && "DeriveUsbStorageKey failed");
+  WFS_ASSERT(std::memcmp(derivedUsbKey, expectedCipher, 16) == 0 &&
+             "DeriveUsbStorageKey result mismatch");
 
   std::cout << "  -> All cryptographic routines verified successfully!"
             << std::endl;
@@ -89,9 +98,9 @@ static void TestFormatAndMount() {
   WfsFileSystem fs;
   bool formatted = fs.Format(&memDev, otp.data(), otp.size(), seeprom.data(),
                              seeprom.size(), 4096);
-  assert(formatted && "Format failed");
-  assert(fs.IsMounted() && "Filesystem not mounted after format");
-  assert(fs.GetSuperblock().generation == 1 && "Initial generation mismatch");
+  WFS_ASSERT(formatted && "Format failed");
+  WFS_ASSERT(fs.IsMounted() && "Filesystem not mounted after format");
+  WFS_ASSERT(fs.GetSuperblock().generation == 1 && "Initial generation mismatch");
 
   // Test writing and reading back file
   std::string testPath = "/usr/title/00050000/10144f00/code/cos.xml";
@@ -102,20 +111,19 @@ static void TestFormatAndMount() {
   bool writeOk = fs.WriteFile(
       testPath, reinterpret_cast<const uint8_t *>(xmlContent.data()),
       xmlContent.size());
-  assert(writeOk && "WriteFile failed");
+  WFS_ASSERT(writeOk && "WriteFile failed");
   fs.CommitTransaction();
 
   std::vector<uint8_t> readBack;
   bool readOk = fs.ReadFile(testPath, readBack);
-  assert(readOk && "ReadFile failed");
-  assert(readBack.size() == xmlContent.size());
-  assert(std::memcmp(readBack.data(), xmlContent.data(), xmlContent.size()) ==
-         0);
+  WFS_ASSERT(readOk && "ReadFile failed");
+  WFS_ASSERT(readBack.size() == xmlContent.size());
+  WFS_ASSERT(std::memcmp(readBack.data(), xmlContent.data(), xmlContent.size()) == 0);
 
   // Verify filesystem consistency
   std::vector<std::string> issues;
   bool clean = fs.CheckIntegrity(issues);
-  assert(clean && "Filesystem integrity check failed after file write");
+  WFS_ASSERT(clean && "Filesystem integrity check failed after file write");
 
   std::cout << "  -> Format, Mount, File Write/Read, and Integrity passed!"
             << std::endl;
@@ -179,12 +187,12 @@ static void TestTitleInstallationAndUninstallation() {
   // 1. Verify Title Enumeration
   std::vector<InstalledTitleInfo> titles;
   titleMgr.EnumerateInstalledTitles(titles);
-  assert(titles.size() == 1 &&
-         "Title enumeration should find exactly 1 installed title");
-  assert(titles[0].id.fullId == titleId.fullId);
-  assert(titles[0].titleName.find("Homebrew") != std::string::npos);
-  assert(titles[0].productCode == "WUP-P-TEST");
-  assert(titles[0].hasTicket == true);
+  WFS_ASSERT(titles.size() == 1 &&
+             "Title enumeration should find exactly 1 installed title");
+  WFS_ASSERT(titles[0].id.fullId == titleId.fullId);
+  WFS_ASSERT(titles[0].titleName.find("Homebrew") != std::string::npos);
+  WFS_ASSERT(titles[0].productCode == "WUP-P-TEST");
+  WFS_ASSERT(titles[0].hasTicket == true);
 
   std::cout << "  -> Found installed title: " << titles[0].titleName << " ("
             << titles[0].id.ToHexString() << ")" << std::endl;
@@ -193,27 +201,27 @@ static void TestTitleInstallationAndUninstallation() {
   uint32_t freeBefore = fs.GetAllocator()->GetFreeClusterCount();
   titleMgr.UninstallTitle(titleId, true, false, true); // dryRun = true
   uint32_t freeAfterDryRun = fs.GetAllocator()->GetFreeClusterCount();
-  assert(freeBefore == freeAfterDryRun &&
-         "Dry-run uninstallation must not alter cluster allocation count!");
+  WFS_ASSERT(freeBefore == freeAfterDryRun &&
+             "Dry-run uninstallation must not alter cluster allocation count!");
 
   // Verify title still exists after dry-run
   titles.clear();
   titleMgr.EnumerateInstalledTitles(titles);
-  assert(titles.size() == 1 && "Title must still exist after dry-run!");
+  WFS_ASSERT(titles.size() == 1 && "Title must still exist after dry-run!");
 
   // 3. Real Uninstallation
   std::cout << "  -> Performing real uninstallation..." << std::endl;
   bool uninstalled = titleMgr.UninstallTitle(titleId, true, false, false);
-  assert(uninstalled && "Uninstallation failed");
+  WFS_ASSERT(uninstalled && "Uninstallation failed");
 
   // Verify title is gone
   titles.clear();
   titleMgr.EnumerateInstalledTitles(titles);
-  assert(titles.empty() && "Title list must be empty after uninstallation");
+  WFS_ASSERT(titles.empty() && "Title list must be empty after uninstallation");
 
   // Verify ticket is gone
-  assert(!titleMgr.HasTicket(titleId) &&
-         "Ticket must be removed from /usr/packages/");
+  WFS_ASSERT(!titleMgr.HasTicket(titleId) &&
+             "Ticket must be removed from /usr/packages/");
 
   // 4. Critical Verification: ZERO ORPHAN CLUSTERS
   std::vector<std::string> auditIssues;
@@ -222,12 +230,11 @@ static void TestTitleInstallationAndUninstallation() {
     for (const auto &iss : auditIssues)
       std::cerr << "  ISSUE: " << iss << std::endl;
   }
-  assert(integrityClean && "Post-uninstall integrity check failed: Orphan or "
-                           "unallocated clusters detected!");
+  WFS_ASSERT(integrityClean && "Post-uninstall integrity check failed: Orphan or unallocated clusters detected!");
 
   uint32_t freeAfterReal = fs.GetAllocator()->GetFreeClusterCount();
-  assert(freeAfterReal > freeBefore &&
-         "Free clusters must increase after uninstallation");
+  WFS_ASSERT(freeAfterReal > freeBefore &&
+             "Free clusters must increase after uninstallation");
 
   std::cout << "  -> Title safely uninstalled. Zero orphans detected. Free "
                "clusters restored: "
@@ -265,16 +272,16 @@ static void TestAtomicRollbackOnFailure() {
   uint32_t rolledBackFree = fs.GetAllocator()->GetFreeClusterCount();
   uint32_t rolledBackGen = fs.GetSuperblock().generation;
 
-  assert(rolledBackFree == initialFree &&
-         "Cluster count not restored on rollback");
-  assert(rolledBackGen == initialGen &&
-         "Superblock generation altered on rollback");
+  WFS_ASSERT(rolledBackFree == initialFree &&
+             "Cluster count not restored on rollback");
+  WFS_ASSERT(rolledBackGen == initialGen &&
+             "Superblock generation altered on rollback");
 
   uint32_t cluster;
   WfsInodeDisk inode;
   bool exists = fs.ResolvePath("/usr/title/00050000/12345678/content/large.bin",
                                cluster, inode);
-  assert(!exists && "Rolled-back file must not exist on filesystem");
+  WFS_ASSERT(!exists && "Rolled-back file must not exist on filesystem");
 
   std::cout << "  -> Atomic rollback verified successfully. Pre-transaction "
                "state 100% restored!"

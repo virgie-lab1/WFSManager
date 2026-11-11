@@ -63,7 +63,7 @@ bool WfsPhysicalDiskDevice::Open() {
 
     if (hDevice_ == INVALID_HANDLE_VALUE) {
         DWORD err = GetLastError();
-        std::cerr << "[WfsPhysicalDiskDevice] Failed to open " << drivePath.c_str() 
+        std::cerr << "[WfsPhysicalDiskDevice] Failed to open \\\\.\\PhysicalDrive" << driveIndex_
                   << " (Error " << err << "). Administrator privileges required." << std::endl;
         UnlockVolumes();
         return false;

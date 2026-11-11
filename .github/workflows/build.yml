@@ -43,3 +43,4 @@ jobs:
         path: |
           build/Release/wfsmanager.exe
           build/Release/test_wfs.exe
+

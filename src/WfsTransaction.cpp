@@ -38,6 +38,7 @@ bool WfsTransaction::CreateOfflineMetadataBackup(
     const WfsSuperblock& primarySb,
     uint32_t backupSbLba
 ) {
+    (void)primarySb;
     if (!device_ || !device_->IsOpen() || !allocator_) return false;
 
     std::ofstream out(backupFilePath, std::ios::binary);

@@ -417,7 +417,7 @@ uint32_t WfsCrypto::Crc32(const uint8_t* data, size_t length) {
         uint8_t byte = data[i];
         crc ^= byte;
         for (int j = 0; j < 8; ++j) {
-            uint32_t mask = -(crc & 1);
+            uint32_t mask = (crc & 1) ? 0xFFFFFFFFU : 0U;
             crc = (crc >> 1) ^ (0xEDB88320 & mask);
         }
     }
