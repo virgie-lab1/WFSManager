@@ -1,0 +1,45 @@
+name: Build and Test WFSManager
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    name: Windows MSVC (Release)
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Configure CMake
+      run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+
+    - name: Build C++ Executables
+      run: cmake --build build --config Release
+
+    - name: Run C++ Unit & Integrity Test Suite
+      run: .\build\Release\test_wfs.exe
+
+    - name: Run Python Low-Level Cryptography & Allocation Tests
+      run: python tests/verify_wfs_suite.py
+
+    - name: Run Python End-to-End WFS Pipeline Simulator
+      run: python tests/sim_wfs_engine.py
+
+    - name: Upload Build Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: WFSManager-Windows-x64
+        path: |
+          build/Release/wfsmanager.exe
+          build/Release/test_wfs.exe

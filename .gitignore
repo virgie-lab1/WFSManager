@@ -1,0 +1,34 @@
+# Build artifacts
+build/
+bin/
+out/
+*.o
+*.obj
+*.exe
+*.dll
+*.so
+*.dylib
+*.pdb
+*.ilk
+
+# Visual Studio / IDE files
+.vs/
+*.sln.docstates
+*.suo
+*.user
+*.userosscache
+*.vsdconfig
+CMakeSettings.json
+compile_commands.json
+
+# Console Security Keys & Backups (CRITICAL: NEVER COMMIT KEYS OR DUMPS)
+otp.bin
+seeprom.bin
+*.wfsbak
+backups/
+dumped/
+
+# Python test artifacts
+__pycache__/
+*.py[cod]
+*$py.class
