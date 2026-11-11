@@ -127,7 +127,7 @@ bool WfsFileSystem::Format(
     std::memset(&superblock_, 0, sizeof(WfsSuperblock));
     superblock_.magic = WFS_SUPERBLOCK_MAGIC;
     superblock_.version = 1;
-    superblock_.generation = 1;
+    superblock_.generation = 0; // Increment to 1 upon initial format commit
     superblock_.cluster_size = clusterSize_;
     superblock_.total_sectors = totalSectors;
     superblock_.area_count = 1;
